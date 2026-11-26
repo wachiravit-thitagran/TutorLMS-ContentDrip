@@ -22,7 +22,7 @@ $attr=static fn(string $en,string $th):string=>esc_attr(Admin::tr($en,$th));
         <div class="notice notice-success is-dismissible"><p><?php echo $t('Release policy saved.','บันทึกกำหนดการเปิดบทเรียนแล้ว'); ?></p></div>
     <?php endif; ?>
     <form class="tlcd-course-picker" method="get" action="<?php echo esc_url(admin_url(Admin::pagePath())); ?>">
-        <input type="hidden" name="page" value="tlcd">
+        <input type="hidden" name="page" value="<?php echo esc_attr(Admin::pageSlug()); ?>">
         <label for="tlcd-course"><?php echo $t('Course','หลักสูตร'); ?></label>
         <select id="tlcd-course" name="course_id">
             <option value="0"><?php echo $t('Select a course','เลือกหลักสูตร'); ?></option>

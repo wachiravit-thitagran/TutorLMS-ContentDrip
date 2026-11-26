@@ -15,7 +15,7 @@ final class Admin {
     }
     public static function menu(): void {
         $title=self::tr('Content Drip','กำหนดการเปิดบทเรียน');
-        self::$screens[]=add_submenu_page('tutor',$title,$title,'edit_posts','tlcd',[self::class,'page']);
+        self::$screens[]=add_submenu_page('tutor',$title,$title,'edit_posts','tlcd-content-drip',[self::class,'page']);
         // Retain the old Tools URL for existing links and course editors.
         self::$screens[]=add_management_page($title,$title,'edit_posts','tlcd',[self::class,'page']);
     }
@@ -23,6 +23,9 @@ final class Admin {
         if (!in_array($hook,self::$screens,true)) return;
         wp_enqueue_style('tlcd-admin',plugins_url('assets/admin.css',__FILE__),[],'0.1.1');
         wp_enqueue_script('tlcd-admin',plugins_url('assets/admin.js',__FILE__),[],'0.1.1',true);
+    }
+    public static function pageSlug(): string {
+        return current_user_can('manage_tutor_instructor') ? 'tlcd-content-drip' : 'tlcd';
     }
     public static function pagePath(): string {
         return current_user_can('manage_tutor_instructor') ? 'admin.php' : 'tools.php';
@@ -92,6 +95,6 @@ final class Admin {
         check_admin_referer('tlcd_save_'.$course);
         $result=self::update($course,isset($_POST['policy'])&&is_array($_POST['policy'])?wp_unslash($_POST['policy']):[]);
         if (is_wp_error($result)) wp_die(esc_html($result->get_error_message()),'',['response'=>400,'back_link'=>true]);
-        wp_safe_redirect(add_query_arg(['page'=>'tlcd','course_id'=>$course,'saved'=>1],admin_url(self::pagePath())));exit;
+        wp_safe_redirect(add_query_arg(['page'=>self::pageSlug(),'course_id'=>$course,'saved'=>1],admin_url(self::pagePath())));exit;
     }
 }
