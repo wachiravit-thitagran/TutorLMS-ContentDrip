@@ -51,25 +51,64 @@ $attr=static fn(string $en,string $th):string=>esc_attr(Admin::tr($en,$th));
             </div>
         </section>
         <section class="tlcd-panel" aria-labelledby="tlcd-plan-heading">
-            <div class="tlcd-section-head"><div><h2 id="tlcd-plan-heading"><?php echo $t('Curriculum plan','แผนหลักสูตร'); ?></h2><p class="tlcd-muted"><?php echo $t('Count all planned activities, including future topics.','นับกิจกรรมตามแผนทั้งหมด รวมถึงบทที่ยังไม่เปิดหรือยังสร้างไม่ครบ'); ?></p></div></div>
-            <div class="tlcd-plan-grid">
-                <div class="tlcd-field">
-                    <label for="tlcd-planned-topics"><?php echo $t('Planned topics','จำนวนบทตามแผน'); ?></label>
-                    <input id="tlcd-planned-topics" name="policy[expected_topics]" type="number" min="0" max="1000" required value="<?php echo $plannedTopics; ?>">
-                    <span class="tlcd-muted"><?php echo (int)count($topics); ?> <?php echo $t('published topics','บทที่สร้างแล้ว'); ?></span>
-                </div>
-                <div class="tlcd-field">
-                    <label for="tlcd-planned-activities"><?php echo $t('Planned activities','จำนวนกิจกรรมตามแผน'); ?></label>
-                    <input id="tlcd-planned-activities" name="policy[expected_activities]" type="number" min="0" max="100000" required value="<?php echo $plannedActivities; ?>">
-                    <span class="tlcd-muted"><?php echo $actual; ?> <?php echo $t('published activities','กิจกรรมที่สร้างแล้ว'); ?></span>
-                </div>
-                <div class="tlcd-plan-note">
-                    <strong><?php echo $t('Completion protection','ป้องกันการเรียนจบก่อนกำหนด'); ?></strong>
-                    <p><?php echo $t('Locked and missing planned activities keep progress below 100% until requirements are complete.','บทที่ล็อกและกิจกรรมที่ยังขาดจะถูกรวมในการคำนวณ เพื่อไม่ให้ความคืบหน้าเป็น 100% ก่อนเรียนครบ'); ?></p>
-                    <div class="tlcd-track" aria-hidden="true"><span id="tlcd-coverage-bar" style="width:<?php echo (int)min(100,floor(100*$actual/max(1,$plannedActivities,$actual))); ?>%"></span></div>
-                    <span id="tlcd-coverage" class="tlcd-muted" data-actual="<?php echo $actual; ?>"><?php echo $actual; ?> / <?php echo max($actual,$plannedActivities); ?> <?php echo $t('activities created','กิจกรรมที่สร้างแล้ว'); ?></span>
-                </div>
+            <div class="tlcd-section-head">
+                <div><h2 id="tlcd-plan-heading"><?php echo $t('Curriculum plan','แผนหลักสูตร'); ?></h2>
+                <p class="tlcd-muted"><?php echo $t('Set activity targets separately for each topic. Published activities are counted automatically.','กำหนดจำนวนกิจกรรมของแต่ละบทแยกกัน ระบบนับกิจกรรมที่สร้างแล้วให้อัตโนมัติ'); ?></p></div>
+                <button type="button" id="tlcd-add-plan" class="button" hidden><?php echo $t('+ Add future topic','+ เพิ่มบทตามแผน'); ?></button>
             </div>
+            <input type="hidden" name="policy[plan_mode]" value="per_topic">
+            <?php if ($legacy): ?>
+                <div class="tlcd-legacy-note"><?php echo $t('The saved policy has aggregate targets only. Allocate them by topic before saving; the previous totals remain protected.','นโยบายเดิมกำหนดเฉพาะยอดรวม กรุณาจัดสรรรายบทก่อนบันทึก โดยต้องไม่น้อยกว่ายอดเดิม'); ?> <strong><?php echo $legacyTopics; ?> <?php echo $t('topics','บท'); ?> / <?php echo $legacyActivities; ?> <?php echo $t('activities','กิจกรรม'); ?></strong></div>
+            <?php endif; ?>
+            <div class="tlcd-plan-table" id="tlcd-plan-table">
+                <div class="tlcd-plan-header" aria-hidden="true"><span><?php echo $t('Topic','บทเรียน'); ?></span><span><?php echo $t('Created','สร้างแล้ว'); ?></span><span><?php echo $t('Planned activities','กิจกรรมตามแผน'); ?></span><span><?php echo $t('Remaining to create','ยังขาด'); ?></span><span></span></div>
+                <?php
+                $renderFuture=static function ($index,array $r) use ($t,$attr,$linkableTopics,$counts):void {
+                    $id=(int)($r['topic_id']??0);$prefix='policy[plan]['.$index.']';
+                    ?>
+                    <div class="tlcd-plan-row tlcd-plan-pending" data-plan-row data-kind="future" data-actual="0">
+                        <div class="tlcd-field">
+                            <label for="tlcd-plan-title-<?php echo esc_attr((string)$index); ?>"><?php echo $t('Future topic name','ชื่อบทตามแผน'); ?></label>
+                            <input class="tlcd-plan-title" id="tlcd-plan-title-<?php echo esc_attr((string)$index); ?>" name="<?php echo esc_attr($prefix); ?>[title]" type="text" required value="<?php echo esc_attr($r['title']??''); ?>" placeholder="<?php echo $attr('Enter topic name','ระบุชื่อบทเรียน'); ?>">
+                            <select class="tlcd-plan-link" name="<?php echo esc_attr($prefix); ?>[topic_id]" aria-label="<?php echo $attr('Link to a published topic','เชื่อมกับบทที่สร้างแล้ว'); ?>">
+                                <option value="0" data-actual="0"><?php echo $t('Not created yet','ยังไม่ได้สร้างบท'); ?></option>
+                                <?php if ($id): ?><option value="<?php echo $id; ?>" data-actual="0" selected><?php echo $t('Previously linked topic unavailable','บทที่เคยเชื่อมไว้ยังไม่เผยแพร่'); ?> (#<?php echo $id; ?>)</option><?php endif; ?>
+                                <?php foreach ($linkableTopics as $topic): ?><option value="<?php echo (int)$topic->ID; ?>" data-actual="<?php echo (int)$counts[(int)$topic->ID]; ?>" data-published="1"><?php echo esc_html($topic->post_title); ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="tlcd-plan-number"><span class="tlcd-mobile-label"><?php echo $t('Created','สร้างแล้ว'); ?></span><span class="tlcd-plan-actual">0</span></div>
+                        <div class="tlcd-field"><label class="screen-reader-text" for="tlcd-plan-target-<?php echo esc_attr((string)$index); ?>"><?php echo $t('Planned activities','กิจกรรมตามแผน'); ?></label><input class="tlcd-plan-target" id="tlcd-plan-target-<?php echo esc_attr((string)$index); ?>" name="<?php echo esc_attr($prefix); ?>[expected_activities]" type="number" min="1" max="100000" required value="<?php echo !empty($r['expected_activities'])?(int)$r['expected_activities']:''; ?>"></div>
+                        <div class="tlcd-plan-number"><span class="tlcd-mobile-label"><?php echo $t('Remaining','ยังขาด'); ?></span><span class="tlcd-plan-missing"><?php echo max(1,(int)($r['expected_activities']??1)); ?></span></div>
+                        <button type="button" class="button-link-delete tlcd-remove-plan" hidden aria-label="<?php echo $attr('Remove future topic from plan','ลบบทในอนาคตออกจากแผน'); ?>"><?php echo $t('Remove','ลบ'); ?></button>
+                    </div>
+                    <?php
+                };
+                foreach ($planRows as $index=>$r):
+                    if (!$r['published']) { $renderFuture($index,$r); continue; }
+                    $id=(int)$r['topic_id'];$prefix='policy[plan]['.$index.']';
+                ?>
+                    <div class="tlcd-plan-row" data-plan-row data-kind="actual" data-topic-id="<?php echo $id; ?>" data-actual="<?php echo (int)$r['actual_activities']; ?>">
+                        <div><strong><?php echo esc_html($r['title']); ?></strong><p class="tlcd-muted"><?php echo $t('Published topic','บทที่สร้างแล้ว'); ?></p>
+                            <input type="hidden" name="<?php echo esc_attr($prefix); ?>[topic_id]" value="<?php echo $id; ?>">
+                            <input type="hidden" name="<?php echo esc_attr($prefix); ?>[title]" value="<?php echo esc_attr($r['title']); ?>">
+                        </div>
+                        <div class="tlcd-plan-number"><span class="tlcd-mobile-label"><?php echo $t('Created','สร้างแล้ว'); ?></span><?php echo (int)$r['actual_activities']; ?></div>
+                        <div class="tlcd-field"><label class="screen-reader-text" for="tlcd-plan-target-<?php echo $index; ?>"><?php echo $t('Planned activities','กิจกรรมตามแผน'); ?> — <?php echo esc_html($r['title']); ?></label>
+                            <input class="tlcd-plan-target" id="tlcd-plan-target-<?php echo $index; ?>" name="<?php echo esc_attr($prefix); ?>[expected_activities]" type="number" min="<?php echo max(1,(int)$r['actual_activities']); ?>" max="100000" required value="<?php echo (int)$r['expected_activities']; ?>">
+                        </div>
+                        <div class="tlcd-plan-number"><span class="tlcd-mobile-label"><?php echo $t('Remaining','ยังขาด'); ?></span><span class="tlcd-plan-missing"><?php echo max(0,$r['expected_activities']-$r['actual_activities']); ?></span></div><span></span>
+                    </div>
+                <?php endforeach; ?>
+                <template id="tlcd-plan-template"><?php $renderFuture('__INDEX__',[]); ?></template>
+                <div id="tlcd-plan-empty" class="tlcd-empty" <?php if ($planRows) echo 'hidden'; ?>><?php echo $t('No topics in the plan. Add a future topic or create topics in Tutor LMS.','ยังไม่มีบทในแผน เพิ่มบทตามแผนหรือสร้างบทใน Tutor LMS'); ?></div>
+            </div>
+            <div class="tlcd-plan-totals" aria-live="polite">
+                <div><strong id="tlcd-planned-topics"><?php echo $plannedTopics; ?></strong><span><?php echo $t('Total topics','จำนวนบทตามแผน'); ?></span></div>
+                <div><strong id="tlcd-planned-activities"><?php echo $plannedActivities; ?></strong><span><?php echo $t('Total activities','กิจกรรมตามแผนรวม'); ?></span></div>
+                <div><strong id="tlcd-created-activities"><?php echo $actual; ?></strong><span><?php echo $t('Created activities','สร้างแล้ว'); ?></span></div>
+                <div><strong id="tlcd-missing-activities"><?php echo max(0,$plannedActivities-$actual); ?></strong><span><?php echo $t('Remaining to create','กิจกรรมที่ยังขาด'); ?></span></div>
+            </div>
+            <p class="tlcd-muted tlcd-plan-help"><?php echo $t('Each topic reserves its own activity count. Extra activities in another topic cannot fill its missing activities. Link future plan rows to newly published topics instead of counting them twice; release settings remain separate.','แต่ละบทสำรองจำนวนกิจกรรมของตนเอง กิจกรรมที่เพิ่มในบทอื่นไม่ทดแทนกิจกรรมที่ยังขาด เมื่อสร้างบทจริงแล้วให้เชื่อมกับบทตามแผนเพื่อไม่นับซ้ำ โดยตั้งค่าเปิดเรียนแยกจากแผน'); ?></p>
         </section>
         <section class="tlcd-panel tlcd-schedule" aria-labelledby="tlcd-schedule-title">
             <div class="tlcd-section-head"><div><h2 id="tlcd-schedule-title"><?php echo $t('Topic release schedule','ตารางเปิดบทเรียน'); ?></h2><p class="tlcd-muted"><?php echo $t('Status preview reflects these settings, not live learner progress.','สถานะด้านล่างเป็นตัวอย่างตามการตั้งค่า ไม่ใช่ความคืบหน้าจริงของผู้เรียน'); ?> · <?php echo esc_html(wp_timezone_string()); ?></p></div>
@@ -122,9 +161,9 @@ $attr=static fn(string $en,string $th):string=>esc_attr(Admin::tr($en,$th));
                 </article>
                 <?php endforeach; ?>
                 <?php if (!$topics): ?><div class="tlcd-empty"><?php echo $t('No published topics. Add topics in the Tutor LMS course builder first.','ยังไม่มีบทเรียน กรุณาเพิ่มบทใน Course Builder ของ Tutor LMS'); ?></div><?php endif; ?>
-                <div class="tlcd-future" id="tlcd-future" data-published="<?php echo count($topics); ?>" <?php if ($plannedTopics<=count($topics)) echo 'hidden'; ?>>
+                <div class="tlcd-future" id="tlcd-future" <?php if (!$missingTopics) echo 'hidden'; ?>>
                     <span class="dashicons dashicons-lock" aria-hidden="true"></span>
-                    <span><strong id="tlcd-future-count"><?php echo max(0,$plannedTopics-count($topics)); ?></strong> <?php echo $t('planned topics not created yet','บทตามแผนที่ยังไม่ได้สร้าง'); ?> · <?php echo $t('Reserved in progress','นับรวมในความคืบหน้า'); ?></span>
+                    <span><strong id="tlcd-future-count"><?php echo $missingTopics; ?></strong> <?php echo $t('planned topics not created yet','บทตามแผนที่ยังไม่ได้สร้าง'); ?> · <?php echo $t('Reserved in progress','นับรวมในความคืบหน้า'); ?></span>
                 </div>
             </div>
         </section>

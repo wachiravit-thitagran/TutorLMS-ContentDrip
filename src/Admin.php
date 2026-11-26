@@ -21,8 +21,8 @@ final class Admin {
     }
     public static function assets(string $hook): void {
         if (!in_array($hook,self::$screens,true)) return;
-        wp_enqueue_style('tlcd-admin',plugins_url('assets/admin.css',__FILE__),[],'0.1.2');
-        wp_enqueue_script('tlcd-admin',plugins_url('assets/admin.js',__FILE__),[],'0.1.2',true);
+        wp_enqueue_style('tlcd-admin',plugins_url('assets/admin.css',__FILE__),[],'0.1.3');
+        wp_enqueue_script('tlcd-admin',plugins_url('assets/admin.js',__FILE__),[],'0.1.3',true);
     }
     public static function pageSlug(): string {
         return current_user_can('manage_tutor_instructor') ? 'tlcd-content-drip' : 'tlcd';
@@ -30,15 +30,68 @@ final class Admin {
     public static function pagePath(): string {
         return current_user_can('manage_tutor_instructor') ? 'admin.php' : 'tools.php';
     }
+    /** Validate and canonicalize the per-topic plan without mutating the curriculum. */
+    private static function normalizePlan(array $rows,array $curriculum,array $old) {
+        if (count($rows)>1000) return new \WP_Error('tlcd_invalid_plan','Too many planned topics.');
+        $titles=[];$seen=[];$normalized=[];$oldIds=[];
+        foreach ($curriculum['topics'] as $topic) $titles[(int)$topic->ID]=$topic->post_title;
+        foreach ($old['plan']??[] as $row) if (!empty($row['topic_id'])) $oldIds[(int)$row['topic_id']]=true;
+        foreach ($rows as $row) {
+            if (!is_array($row)) return new \WP_Error('tlcd_invalid_plan','Invalid plan row.');
+            $id=filter_var($row['topic_id']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            $target=filter_var($row['expected_activities']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>100000]]);
+            if ($id===false||$target===false||($id&&!isset($titles[$id])&&!isset($oldIds[$id]))||($id&&isset($seen[$id]))) {
+                return new \WP_Error('tlcd_invalid_plan',self::tr('Invalid or duplicate topic, or activity count.','บทเรียนซ้ำหรือไม่ถูกต้อง หรือจำนวนกิจกรรมไม่ถูกต้อง'));
+            }
+            $title=isset($titles[$id])?$titles[$id]:(is_string($row['title']??null)?sanitize_text_field($row['title']):'');
+            if (!$title) return new \WP_Error('tlcd_invalid_plan',self::tr('Enter a name for every future topic.','ระบุชื่อบทที่วางแผนไว้ทุกบท'));
+            if ($id) $seen[$id]=true;
+            $normalized[]=['topic_id'=>$id,'title'=>$title,'expected_activities'=>max($target,$curriculum['counts'][$id]??0)];
+        }
+        $summary=Policy::summarizePlan($normalized,$curriculum['counts']);
+        if ($summary['expected_topics']>1000||$summary['expected_activities']>100000)
+            return new \WP_Error('tlcd_invalid_plan','Curriculum plan exceeds the supported limit.');
+        // Existing aggregate policies must be explicitly reallocated, not silently reduced on migration.
+        if (!isset($old['plan']) && !empty($old['enabled']) &&
+            ($summary['expected_topics']<(int)($old['expected_topics']??0)||$summary['expected_activities']<(int)($old['expected_activities']??0))) {
+            return new \WP_Error('tlcd_legacy_reserve',self::tr('Allocate at least the previously saved topic and activity totals before converting the plan.','จัดสรรจำนวนบทและกิจกรรมให้ไม่น้อยกว่านโยบายเดิมก่อนเปลี่ยนเป็นแผนรายบท'));
+        }
+        $plan=[];
+        foreach ($summary['rows'] as $row) {
+            $id=$row['topic_id'];
+            $plan[]=['topic_id'=>$id,'title'=>$titles[$id]??$row['title'],'expected_activities'=>$row['expected_activities']];
+        }
+        return ['plan'=>$plan,'expected_topics'=>$summary['expected_topics'],'expected_activities'=>$summary['expected_activities']];
+    }
+
     public static function update(int $course,array $input) {
         if (get_post_type($course)!=='courses'||!current_user_can('edit_post',$course))
             return new \WP_Error('tlcd_forbidden','You cannot manage this course.');
-        $topics=Plugin::topics($course);
-        $et=filter_var($input['expected_topics']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>1000]]);
-        $ea=filter_var($input['expected_activities']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>100000]]);
-        if ($et===false||$ea===false) return new \WP_Error('tlcd_invalid_plan','Invalid curriculum plan.');
-        $cfg=['enabled'=>!empty($input['enabled']),'expected_topics'=>$et,'expected_activities'=>$ea,'rules'=>[]];
-        if ($cfg['enabled']&&!$et&&!$ea) return new \WP_Error('tlcd_invalid_plan','Set a planned topic or activity count.');
+        $curriculum=Plugin::curriculum($course);
+        $topics=$curriculum['topics'];$old=Plugin::config($course);
+        $cfg=['enabled'=>!empty($input['enabled']),'rules'=>[]];
+        $explicitPlan=array_key_exists('plan',$input)||($input['plan_mode']??'')==='per_topic';
+        if ($explicitPlan) {
+            $rows=$input['plan']??[];
+            if (!is_array($rows)) return new \WP_Error('tlcd_invalid_plan','Invalid curriculum plan.');
+            $resolved=self::normalizePlan($rows,$curriculum,$old);
+            if (is_wp_error($resolved)) return $resolved;
+            $cfg=array_merge($cfg,$resolved);
+        } elseif (is_array($old['plan']??null)) {
+            // Old API clients can still edit release rules without discarding the per-topic plan.
+            $resolved=self::normalizePlan($old['plan'],$curriculum,$old);
+            if (is_wp_error($resolved)) return $resolved;
+            foreach (['expected_topics','expected_activities'] as $key)
+                if (isset($input[$key]) && (int)$input[$key]!== (int)$old[$key] && (int)$input[$key]!== (int)$resolved[$key])
+                    return new \WP_Error('tlcd_plan_required','Use the per-topic plan to change curriculum targets.');
+            $cfg=array_merge($cfg,$resolved);
+        } else {
+            $et=filter_var($input['expected_topics']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>1000]]);
+            $ea=filter_var($input['expected_activities']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>100000]]);
+            if ($et===false||$ea===false) return new \WP_Error('tlcd_invalid_plan','Invalid curriculum plan.');
+            $cfg['expected_topics']=$et;$cfg['expected_activities']=$ea;
+        }
+        if ($cfg['enabled']&&!$cfg['expected_topics']&&!$cfg['expected_activities']) return new \WP_Error('tlcd_invalid_plan','Set a planned topic or activity count.');
         foreach ($topics as $topic) {
             $id=(int)$topic->ID;$raw=$input['rules'][$id]??['mode'=>'manual'];
             if (!is_array($raw)||!in_array($raw['mode']??'',Policy::MODES,true)) return new \WP_Error('tlcd_invalid_rule','Invalid release mode.');
@@ -77,9 +130,21 @@ final class Admin {
             if (isset($counts[$parent])) $counts[$parent]++;
         }
         $actual=array_sum($counts);
-        $plannedTopics=(int)($cfg['expected_topics']??count($topics));
-        $plannedActivities=(int)($cfg['expected_activities']??$actual);
         $enabled=!empty($cfg['enabled']);
+        $legacy=!isset($cfg['plan'])&&$enabled;
+        $legacyTopics=(int)($cfg['expected_topics']??0);
+        $legacyActivities=(int)($cfg['expected_activities']??0);
+        $planSummary=$valid?Plugin::planSummary($course):['rows'=>[],'expected_topics'=>0,'expected_activities'=>0,'missing_topics'=>0];
+        $planRows=$planSummary['rows'];
+        // Legacy totals have no per-topic allocation. Prompt for an explicit allocation.
+        if ($legacy) for ($i=count($planRows);$i<$legacyTopics;$i++)
+            $planRows[]=['topic_id'=>0,'title'=>'','expected_activities'=>0,'actual_activities'=>0,'published'=>false];
+        $boundIds=[];
+        foreach ($cfg['plan']??[] as $r) if (!empty($r['topic_id'])) $boundIds[(int)$r['topic_id']]=true;
+        $linkableTopics=array_values(array_filter($topics,static fn($t)=>isset($cfg['plan'])&&!isset($boundIds[(int)$t->ID])));
+        $plannedTopics=count($planRows);
+        $plannedActivities=array_sum(array_map(static fn($r)=>max(1,(int)$r['expected_activities']),$planRows));
+        $missingTopics=count(array_filter($planRows,static fn($r)=>!$r['published']));
         $now=time();
         $labels=[
             'open'=>self::tr('Open','เปิดแล้ว'),

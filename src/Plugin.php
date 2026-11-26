@@ -148,6 +148,32 @@ final class Plugin {
             nocache_headers();
         }
     }
+    /** Published curriculum counts used by the plan editor and its API. */
+    public static function curriculum(int $course): array {
+        $topics=self::topics($course);
+        $counts=array_fill_keys(array_map(static fn($t)=>(int)$t->ID,$topics),0);
+        foreach (tutor_utils()->get_course_contents_by_id($course)?:[] as $item) {
+            $id=(int)$item->post_parent;
+            if (isset($counts[$id])) $counts[$id]++;
+        }
+        return ['topics'=>$topics,'counts'=>$counts];
+    }
+    public static function planSummary(int $course): array {
+        $cfg=self::config($course);
+        $c=self::curriculum($course);
+        $summary=Policy::summarizePlan(is_array($cfg['plan']??null)?$cfg['plan']:[],$c['counts']);
+        $titles=[];
+        foreach ($c['topics'] as $t) $titles[(int)$t->ID]=$t->post_title;
+        foreach ($summary['rows'] as &$row) if ($row['published']) $row['title']=$titles[$row['topic_id']];
+        unset($row);
+        $summary['mode']=array_key_exists('plan',$cfg)?'per_topic':'legacy';
+        if ($summary['mode']==='legacy') {
+            $summary['legacy_expected_topics']=(int)($cfg['expected_topics']??0);
+            $summary['legacy_expected_activities']=(int)($cfg['expected_activities']??0);
+        }
+        return $summary;
+    }
+
     /** Preserve native Tutor activity semantics; count only released published items. */
     public static function stats(int $course,int $user): array {
         $cfg=self::config($course);
@@ -159,10 +185,11 @@ final class Plugin {
             if (!self::topicOpen((int)$topic->ID,$user)) $locked[(int)$topic->ID]=true;
         }
         $nonempty=[];$actual=0;$completed=0;$quizzes=[];
+        $counts=array_fill_keys(array_keys($published),0);
         foreach ($items as $item) {
             $topic=(int)$item->post_parent;
             if (!isset($published[$topic])) continue;
-            $actual++;$nonempty[$topic]=true;
+            $actual++;$nonempty[$topic]=true;$counts[$topic]++;
             if (isset($locked[$topic])||!$user) continue;
             if ($item->post_type==='lesson'&&tutor_utils()->is_completed_lesson($item->ID,$user)) $completed++;
             elseif ($item->post_type==='tutor_quiz') $quizzes[]=(int)$item->ID;
@@ -174,6 +201,10 @@ final class Plugin {
             $args=array_merge([$user,QuizModel::ATTEMPT_STARTED],$quizzes);
             $completed+=(int)$wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(DISTINCT quiz_id) FROM {$wpdb->prefix}tutor_quiz_attempts WHERE user_id=%d AND attempt_status!=%s AND quiz_id IN ($marks)",...$args));
+        }
+        if (is_array($cfg['plan']??null)) {
+            $summary=Policy::summarizePlan($cfg['plan'],$counts);
+            return Policy::progress($actual,$completed,count($nonempty),$summary['expected_topics'],$summary['expected_activities'],!empty($locked));
         }
         return Policy::progress($actual,$completed,count($nonempty),max(count($topics),(int)($cfg['expected_topics']??0)),(int)($cfg['expected_activities']??0),!empty($locked));
     }

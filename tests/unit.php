@@ -23,3 +23,19 @@ check(Policy::progress(6,6,2,4,0,false)['completed_percent']<100,'reserve missin
 check(Policy::progress(6,6,2,2,6,true)['completed_percent']<100,'locked empty topic');
 check(Policy::progress(201,200,4,4,201,false)['completed_percent']===99,'no rounded 100');
 check(Policy::progress(0,0,0,4,12,true)['completed_percent']===0,'empty course');
+
+$p=[['topic_id'=>1,'title'=>'One','expected_activities'=>3],['topic_id'=>2,'title'=>'Two','expected_activities'=>5],['topic_id'=>0,'title'=>'Three','expected_activities'=>2],['topic_id'=>0,'title'=>'Four','expected_activities'=>4]];
+$s=Policy::summarizePlan($p,[1=>3,2=>5]);
+check($s['expected_activities']===14&&$s['expected_topics']===4,'unequal per-topic plan sums 3+5+2+4');
+check(Policy::progress(8,3,2,$s['expected_topics'],$s['expected_activities'],true)['completed_percent']===21,'first topic has unequal progress weight');
+$s=Policy::summarizePlan($p,[1=>5,2=>3]);
+check($s['expected_activities']===16&&$s['missing_activities']===8,'extra activity in one topic cannot cover another topic deficit');
+$s=Policy::summarizePlan($p,[1=>3,2=>5,3=>1]);
+check($s['expected_activities']===15&&$s['missing_topics']===2,'new unlinked topic counts separately until explicitly linked');
+$p[2]['topic_id']=3;
+$s=Policy::summarizePlan($p,[1=>3,2=>5,3=>1]);
+check($s['expected_activities']===14&&$s['missing_topics']===1,'explicit binding consumes the reserved future topic once');
+$s=Policy::summarizePlan($p,[1=>3,3=>1]);
+check($s['expected_activities']===14&&$s['missing_topics']===2,'deleted or unpublished topic retains its reservation');
+$s=Policy::summarizePlan([],[1=>0]);
+check($s['expected_activities']===1&&$s['actual_activities']===0,'empty topic reserves an activity');

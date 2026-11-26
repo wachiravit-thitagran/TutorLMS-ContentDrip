@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Tutor LMS Content Drip
  * Description: Scheduled topic release and protected course progress for Tutor LMS Free.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Requires Plugins: tutor

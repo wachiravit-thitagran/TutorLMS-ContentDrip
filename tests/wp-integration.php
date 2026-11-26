@@ -37,9 +37,30 @@ $_GET['course_id']=$course;
 $before=Plugin::config($course);
 ob_start();Admin::page();$markup=ob_get_clean();
 tlcd_check(str_contains($markup,'id="tlcd-policy"'),'admin policy form rendered');
-tlcd_check(str_contains($markup,'id="tlcd-planned-topics"')&&str_contains($markup,'value="4"'),'planned counts rendered');
+tlcd_check(str_contains($markup,'id="tlcd-planned-topics"')&&str_contains($markup,'id="tlcd-add-plan"'),'per-topic plan and future control rendered');
 tlcd_check(!str_contains($markup,'id="tlcd-bulk"')&&!str_contains($markup,'id="tlcd-apply-schedule"'),'weekly schedule control removed');
 tlcd_check(str_contains($markup,'id="tlcd-mode-'.$t1.'"')&&str_contains($markup,'id="tlcd-date-'.$t1.'"')&&str_contains($markup,'id="tlcd-mode-'.$t2.'"')&&str_contains($markup,'id="tlcd-date-'.$t2.'"'),'individual topic scheduling retained');
 tlcd_check(str_contains($markup,'data-topic="'.$t1.'"')&&str_contains($markup,'data-topic="'.$t2.'"'),'topic rows rendered');
 tlcd_check(Plugin::config($course)===$before,'rendering does not mutate saved policy');
 tlcd_check(str_contains($markup,'data-state="open"')&&str_contains($markup,'data-state="locked"'),'persisted release states rendered');
+
+// Legacy totals are retained until explicitly reallocated.
+$badPlan=[['topic_id'=>$t1,'title'=>'Week 1','expected_activities'=>1],['topic_id'=>$t2,'title'=>'Week 2','expected_activities'=>1]];
+tlcd_check(is_wp_error(Admin::update($course,['enabled'=>true,'plan'=>$badPlan,'rules'=>[]])),'legacy targets cannot silently shrink');
+$plan=[['topic_id'=>$t1,'title'=>'Week 1','expected_activities'=>1],['topic_id'=>$t2,'title'=>'Week 2','expected_activities'=>3],
+    ['topic_id'=>0,'title'=>'Week 3','expected_activities'=>2],['topic_id'=>0,'title'=>'Week 4','expected_activities'=>4]];
+$rules=[$t1=>['mode'=>'open'],$t2=>['mode'=>'manual']];
+$policy=Admin::update($course,['enabled'=>true,'plan'=>$plan,'rules'=>$rules]);
+tlcd_check(!is_wp_error($policy)&&$policy['expected_activities']===10&&$policy['expected_topics']===4,'per-topic targets derive total of ten');
+tlcd_check(Plugin::stats($course,$student)['completed_percent']===10,'per-topic progress does not assume equal weights');
+tlcd_check(Plugin::planSummary($course)['missing_activities']===8,'per-topic plan preserves all missing activities');
+$dup=$plan;$dup[]=$plan[0];
+tlcd_check(is_wp_error(Admin::update($course,['enabled'=>true,'plan'=>$dup,'rules'=>$rules])),'duplicate topic rejected');
+$wrong=$plan;$wrong[0]['topic_id']=999999999;
+tlcd_check(is_wp_error(Admin::update($course,['enabled'=>true,'plan'=>$wrong,'rules'=>$rules])),'unknown topic rejected');
+$policy=Admin::update($course,['enabled'=>true,'expected_topics'=>4,'expected_activities'=>10,'rules'=>$rules]);
+tlcd_check(!is_wp_error($policy)&&count($policy['plan'])===4,'legacy API update preserves explicit plan');
+tlcd_check(is_wp_error(Admin::update($course,['enabled'=>true,'expected_topics'=>2,'expected_activities'=>2,'rules'=>$rules])),'legacy API cannot replace explicit targets');
+ob_start();Admin::page();$markup=ob_get_clean();
+tlcd_check(str_contains($markup,'id="tlcd-plan-template"')&&str_contains($markup,'Week 3')&&str_contains($markup,'Week 4'),'future topic targets rendered');
+tlcd_check(str_contains($markup,'id="tlcd-planned-activities">10</strong>'),'calculated total rendered');
