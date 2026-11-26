@@ -139,9 +139,8 @@ final class Admin {
         // Legacy totals have no per-topic allocation. Prompt for an explicit allocation.
         if ($legacy) for ($i=count($planRows);$i<$legacyTopics;$i++)
             $planRows[]=['topic_id'=>0,'title'=>'','expected_activities'=>0,'actual_activities'=>0,'published'=>false];
-        $boundIds=[];
-        foreach ($cfg['plan']??[] as $r) if (!empty($r['topic_id'])) $boundIds[(int)$r['topic_id']]=true;
-        $linkableTopics=array_values(array_filter($topics,static fn($t)=>isset($cfg['plan'])&&!isset($boundIds[(int)$t->ID])));
+        // Allow an explicit merge even if the new topic was included in an earlier save.
+        $linkableTopics=$topics;
         $plannedTopics=count($planRows);
         $plannedActivities=array_sum(array_map(static fn($r)=>max(1,(int)$r['expected_activities']),$planRows));
         $missingTopics=count(array_filter($planRows,static fn($r)=>!$r['published']));
