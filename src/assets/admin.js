@@ -8,11 +8,7 @@
     const dirtyText = document.getElementById('tlcd-dirty');
     const planTopics = document.getElementById('tlcd-planned-topics');
     const planActivities = document.getElementById('tlcd-planned-activities');
-    const future = document.getElementById('tlcd-future');
     const planTable = document.getElementById('tlcd-plan-table');
-    const planTemplate = document.getElementById('tlcd-plan-template');
-    const addPlan = document.getElementById('tlcd-add-plan');
-    let nextIndex = planTable.querySelectorAll('[data-plan-row]').length;
     let dirty = false;
     function markDirty(value) {
         dirty = value;
@@ -53,71 +49,20 @@
     }
     function updatePlan() {
         const planRows = [...planTable.querySelectorAll('[data-plan-row]')];
-        const futureRows = planRows.filter(row => row.dataset.kind === 'future');
-        const linked = new Set();
-        // Explicit binding consumes the new topic's default row, not its reservation twice.
-        futureRows.forEach(row => {
-            const select = row.querySelector('.tlcd-plan-link');
-            const option = select.selectedOptions[0];
-            if (option && option.dataset.published === '1') linked.add(option.value);
-        });
-        let topics = 0, target = 0, created = 0, pending = 0;
+        let target = 0, created = 0;
         planRows.forEach(row => {
-            const actualRow = row.dataset.kind === 'actual';
-            const replaced = actualRow && linked.has(row.dataset.topicId);
-            row.hidden = replaced;
-            if (actualRow) row.querySelectorAll('input').forEach(input => {input.disabled = replaced;});
-            if (replaced) return;
-            let actual = Number(row.dataset.actual) || 0;
-            if (!actualRow) {
-                const select = row.querySelector('.tlcd-plan-link');
-                const option = select.selectedOptions[0];
-                const isLinked = option && option.dataset.published === '1';
-                actual = isLinked ? (Number(option.dataset.actual) || 0) : 0;
-                if (!isLinked) pending++;
-                const title = row.querySelector('.tlcd-plan-title');
-                title.required = !isLinked;
-                row.querySelector('.tlcd-plan-actual').textContent = actual;
-                [...select.options].forEach(o => {
-                    o.disabled = o.dataset.published === '1' && o.value !== select.value && linked.has(o.value);
-                });
-                row.querySelector('.tlcd-remove-plan').hidden = false;
-            }
+            const actual = Number(row.dataset.actual) || 0;
             const input = row.querySelector('.tlcd-plan-target');
-            input.min = Math.max(1, actual);
             const count = Math.max(1, actual, Number(input.value) || 0);
             row.querySelector('.tlcd-plan-missing').textContent = count - actual;
-            topics++;target += count;created += actual;
+            target += count;created += actual;
         });
-        planTopics.textContent = topics;
+        planTopics.textContent = planRows.length;
         planActivities.textContent = target;
         document.getElementById('tlcd-created-activities').textContent = created;
         document.getElementById('tlcd-missing-activities').textContent = Math.max(0,target-created);
-        document.getElementById('tlcd-plan-empty').hidden = topics > 0;
-        future.hidden = pending === 0;
-        document.getElementById('tlcd-future-count').textContent = pending;
+        document.getElementById('tlcd-plan-empty').hidden = planRows.length > 0;
     }
-    addPlan.hidden = false;
-    addPlan.addEventListener('click', () => {
-        if (planTable.querySelectorAll('[data-plan-row]').length >= 1000) return;
-        const fragment = planTemplate.content.cloneNode(true);
-        const row = fragment.querySelector('[data-plan-row]');
-        const index = String(nextIndex++);
-        row.querySelectorAll('[name],[id],[for]').forEach(el => {
-            ['name','id','for'].forEach(attr => {
-                if (el.hasAttribute(attr)) el.setAttribute(attr,el.getAttribute(attr).replaceAll('__INDEX__',index));
-            });
-        });
-        planTable.insertBefore(fragment,planTemplate);
-        markDirty(true);updatePlan();
-        row.querySelector('.tlcd-plan-title').focus();
-    });
-    planTable.addEventListener('click', event => {
-        const button = event.target.closest('.tlcd-remove-plan');
-        if (!button) return;
-        button.closest('[data-plan-row]').remove();
-        markDirty(true);updatePlan();
-    });
     form.addEventListener('input', event => {
         if (event.target.name && event.target.name.startsWith('policy[')) {markDirty(true);update();}
     });

@@ -2,7 +2,7 @@
 Tags: tutor lms, content drip, scheduled learning
 Requires at least: 6.5
 Requires PHP: 8.1
-Stable tag: 0.1.3
+Stable tag: 0.1.4
 License: GPL-2.0-or-later
 
 Initial release candidate for scheduled topic release on Tutor LMS Free.
@@ -11,6 +11,9 @@ Initial release candidate for scheduled topic release on Tutor LMS Free.
 Install Tutor LMS, activate this plugin, and visit Tools > Content Drip.
 
 == Changelog ==
+= 0.1.4 =
+Use Tutor LMS Course Builder as the only source of real topics. Remove future-topic creation, retain closed-topic rules through curriculum edits, and protect old reservations until explicitly reconciled.
+
 = 0.1.3 =
 Per-topic curriculum targets, explicit future topic reservations, computed totals and backward-compatible Abilities API.
 

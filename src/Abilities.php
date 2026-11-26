@@ -29,8 +29,9 @@ final class Abilities {
         $schema['properties']['policy']=['type'=>'object','properties'=>[
             'enabled'=>['type'=>'boolean'],'expected_topics'=>['type'=>'integer','minimum'=>0,'maximum'=>1000],
             'expected_activities'=>['type'=>'integer','minimum'=>0,'maximum'=>100000],
-            'plan'=>['type'=>'array','maxItems'=>1000,'description'=>'Explicit per-topic activity targets. topic_id 0 reserves a future topic; link it to the published topic ID once created. Existing topics not included are counted automatically. Totals are derived.','items'=>[
-                'type'=>'object','properties'=>['topic_id'=>['type'=>'integer','minimum'=>0],'title'=>['type'=>'string'],'expected_activities'=>['type'=>'integer','minimum'=>1,'maximum'=>100000]],
+            'reconcile_legacy'=>['type'=>'boolean','description'=>'Explicitly confirm replacing obsolete reserved topics or aggregate targets with the real curriculum. May increase progress.'],
+            'plan'=>['type'=>'array','maxItems'=>1000,'description'=>'Activity targets for actual published Tutor LMS topics only. Create topics in Course Builder; existing topics not included are counted automatically. Totals are derived.','items'=>[
+                'type'=>'object','properties'=>['topic_id'=>['type'=>'integer','minimum'=>1],'title'=>['type'=>'string'],'expected_activities'=>['type'=>'integer','minimum'=>1,'maximum'=>100000]],
                 'required'=>['topic_id','title','expected_activities'],'additionalProperties'=>false]],
             'rules'=>['type'=>'object','additionalProperties'=>['type'=>'object','properties'=>[
                 'mode'=>['type'=>'string','enum'=>Policy::MODES],'manual_open'=>['type'=>'boolean'],
@@ -39,7 +40,7 @@ final class Abilities {
         ],'required'=>['enabled','rules'],'additionalProperties'=>false];
         $schema['required'][]='policy';
         wp_register_ability('tutorlms-content-drip/update-policy',[
-            'label'=>'Update Content Drip Policy','description'=>'Replace release rules and optionally the per-topic plan. Omitted release rules are locked; omitting plan preserves a saved per-topic plan. Legacy aggregate counts remain supported.','category'=>'tutorlms-content-drip',
+            'label'=>'Update Content Drip Policy','description'=>'Replace release rules and optionally activity targets for actual Tutor topics. Omitted release rules are locked; omitting plan preserves the saved plan. Previously saved legacy reservations require explicit reconciliation.','category'=>'tutorlms-content-drip',
             'input_schema'=>$schema,'output_schema'=>['type'=>'object','additionalProperties'=>true],'permission_callback'=>[self::class,'permitted'],
             'execute_callback'=>static fn(array $input)=>Admin::update((int)$input['course_id'],$input['policy']),
             'meta'=>['show_in_rest'=>true,'mcp'=>['public'=>true,'type'=>'tool'],'annotations'=>['readonly'=>false,'destructive'=>false,'idempotent'=>true]],
