@@ -3,7 +3,9 @@
 Scheduled release for Tutor LMS Free (target 4.2.1). No changes to Tutor core.
 
 ## Setup
-WP Admin > Tools > Content Drip: select a course, enable, set planned topic and activity counts, then set the release rule per published topic. Modes: always open, manual, scheduled, enrollment-relative. Dates use the WordPress timezone; enrollment-relative days are elapsed 24-hour days. Newly added topics default to locked. For BIA's four weeks with three activities each, set 4 planned topics and 12 planned activities, even if only two topics are currently published.
+WP Admin > Tutor LMS > Content Drip (or Tools > Content Drip): select a course, enable, set planned topic and activity counts, then set the release rule per published topic. Modes: always open, manual, scheduled, enrollment-relative. Dates use the WordPress timezone; enrollment-relative days are elapsed 24-hour days. Newly added topics default to locked. For BIA's four weeks with three activities each, set 4 planned topics and 12 planned activities, even if only two topics are currently published.
+
+The admin screen displays release states, planned activity counts and upcoming topics; the weekly schedule helper fills the dates in curriculum order for review before saving. The interface uses Thai or English according to the administrator locale.
 
 ## Behavior
 Locked activities stay in the denominator and are excluded from the numerator; missing planned topics/activities reserve progress. Native auto-completion uses the protected stats. Normal learner direct URL, sidebar, lesson/quiz actions, known AJAX handlers and Tutor v4.2.1 REST content routes are guarded. Core REST bodies are redacted. The aggregate Tutor REST topic/curriculum endpoints are conservatively denied while any topic is locked. Enrollment-relative REST routes fail closed if the token viewer is not a WordPress user. Editors may preview, not bypass learner eligibility. Unmanaged courses retain native behavior.

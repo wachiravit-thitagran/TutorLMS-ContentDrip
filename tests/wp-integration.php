@@ -31,3 +31,14 @@ tlcd_check(is_wp_error(Admin::update($course,['enabled'=>false])),'student canno
 wp_set_current_user($admin->ID);
 tlcd_check(!Plugin::locked($l2,$admin->ID),'editor preview');
 tlcd_check(Plugin::locked($l2,$admin->ID,false),'eligibility ignores editor bypass');
+
+// The management screen must render persisted rules and not mutate the policy.
+$_GET['course_id']=$course;
+$before=Plugin::config($course);
+ob_start();Admin::page();$markup=ob_get_clean();
+tlcd_check(str_contains($markup,'id="tlcd-policy"'),'admin policy form rendered');
+tlcd_check(str_contains($markup,'id="tlcd-planned-topics"')&&str_contains($markup,'value="4"'),'planned counts rendered');
+tlcd_check(str_contains($markup,'id="tlcd-apply-schedule"'),'weekly schedule control rendered');
+tlcd_check(str_contains($markup,'data-topic="'.$t1.'"')&&str_contains($markup,'data-topic="'.$t2.'"'),'topic rows rendered');
+tlcd_check(Plugin::config($course)===$before,'rendering does not mutate saved policy');
+tlcd_check(str_contains($markup,'data-state="open"')&&str_contains($markup,'data-state="locked"'),'persisted release states rendered');
