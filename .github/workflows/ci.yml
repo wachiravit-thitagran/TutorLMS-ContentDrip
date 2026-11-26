@@ -1,0 +1,74 @@
+name: CI and package
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: php tests/unit.php
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping -h localhost -proot" --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          tools: wp-cli
+          coverage: none
+      - name: Install WordPress and Tutor LMS Free
+        run: |
+          mkdir -p /tmp/tlcd-wp
+          wp core download --path=/tmp/tlcd-wp
+          wp config create --path=/tmp/tlcd-wp --dbname=wordpress --dbuser=root --dbpass=root --dbhost=127.0.0.1:3306
+          wp core install --path=/tmp/tlcd-wp --url=http://localhost --title=Test --admin_user=admin --admin_password=ci-only-password --admin_email=admin@example.test
+          wp plugin install tutor --version=4.2.1 --activate --path=/tmp/tlcd-wp
+          ln -s "$GITHUB_WORKSPACE" /tmp/tlcd-wp/wp-content/plugins/tutor-lms-content-drip
+          wp plugin activate tutor-lms-content-drip --path=/tmp/tlcd-wp
+      - run: wp eval-file "$GITHUB_WORKSPACE/tests/wp-integration.php" --path=/tmp/tlcd-wp
+  package:
+    needs: [unit, integration]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build WordPress plugin ZIP
+        run: |
+          mkdir -p dist/tutor-lms-content-drip
+          cp tutor-lms-content-drip.php readme.txt README.md dist/tutor-lms-content-drip/
+          cp -r src dist/tutor-lms-content-drip/
+          cd dist && zip -r tutor-lms-content-drip.zip tutor-lms-content-drip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tutor-lms-content-drip
+          path: dist/tutor-lms-content-drip.zip
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/tutor-lms-content-drip.zip --generate-notes
