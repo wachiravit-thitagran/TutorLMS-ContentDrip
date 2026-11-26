@@ -66,32 +66,5 @@
         if (!dirty) return;
         event.preventDefault();event.returnValue = '';
     });
-    const bulk = document.getElementById('tlcd-bulk');
-    if (bulk) {
-        bulk.hidden = false;
-        document.getElementById('tlcd-apply-schedule').addEventListener('click', () => {
-            const first = document.getElementById('tlcd-first-date');
-            const interval = document.getElementById('tlcd-interval');
-            const error = document.getElementById('tlcd-bulk-error');
-            const base = new Date(first.value + ':00Z');
-            const days = Number(interval.value);
-            if (!first.value || !Number.isFinite(base.getTime()) || !Number.isInteger(days) || days < 1 || days > 365) {
-                error.hidden = false;return;
-            }
-            // UTC is used only as calendar arithmetic, preserving the site's local wall clock.
-            const values = rows.map((row,index) => {
-                const date = new Date(base.getTime());
-                date.setUTCDate(date.getUTCDate() + index * days);
-                return date.toISOString().slice(0,16);
-            });
-            if (values.some(value => !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))) {error.hidden=false;return;}
-            error.hidden = true;
-            rows.forEach((row,index) => {
-                row.querySelector('.tlcd-mode').value = 'scheduled';
-                row.querySelector('.tlcd-date').value = values[index];
-            });
-            markDirty(true);update();
-        });
-    }
     update();
 })();

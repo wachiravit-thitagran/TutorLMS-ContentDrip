@@ -79,18 +79,6 @@ $attr=static fn(string $en,string $th):string=>esc_attr(Admin::tr($en,$th));
                     <span><span id="tlcd-relative-count">—</span> <?php echo $t('per learner','ตามผู้เรียน'); ?></span>
                 </div>
             </div>
-            <?php if ($topics): ?>
-            <details class="tlcd-bulk" id="tlcd-bulk" hidden>
-                <summary><?php echo $t('Create a weekly schedule','ตั้งตารางเปิดรายสัปดาห์'); ?></summary>
-                <div class="tlcd-bulk-inner">
-                    <div class="tlcd-field"><label for="tlcd-first-date"><?php echo $t('First topic opens','วันและเวลาเปิดบทแรก'); ?></label><input id="tlcd-first-date" type="datetime-local"></div>
-                    <div class="tlcd-field"><label for="tlcd-interval"><?php echo $t('Interval (days)','ระยะห่าง (วัน)'); ?></label><input id="tlcd-interval" type="number" min="1" max="365" value="7"></div>
-                    <button type="button" id="tlcd-apply-schedule" class="button"><?php echo $t('Apply to published topics','กำหนดตารางให้บทที่สร้างแล้ว'); ?></button>
-                </div>
-                <p class="tlcd-muted"><?php echo $t('Replaces the release rules of all listed topics in curriculum order. Review the preview and save to make it effective.','แทนที่เงื่อนไขของทุกบทที่แสดงตามลำดับหลักสูตร ตรวจสอบก่อนกดบันทึก'); ?></p>
-                <p id="tlcd-bulk-error" class="tlcd-error" role="alert" hidden><?php echo $t('Enter a valid first date and interval.','กรุณาระบุวันเริ่มต้นและระยะห่างให้ถูกต้อง'); ?></p>
-            </details>
-            <?php endif; ?>
             <div class="tlcd-rows">
                 <?php foreach ($topics as $index=>$topic):
                     $id=(int)$topic->ID;

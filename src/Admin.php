@@ -21,8 +21,8 @@ final class Admin {
     }
     public static function assets(string $hook): void {
         if (!in_array($hook,self::$screens,true)) return;
-        wp_enqueue_style('tlcd-admin',plugins_url('assets/admin.css',__FILE__),[],'0.1.1');
-        wp_enqueue_script('tlcd-admin',plugins_url('assets/admin.js',__FILE__),[],'0.1.1',true);
+        wp_enqueue_style('tlcd-admin',plugins_url('assets/admin.css',__FILE__),[],'0.1.2');
+        wp_enqueue_script('tlcd-admin',plugins_url('assets/admin.js',__FILE__),[],'0.1.2',true);
     }
     public static function pageSlug(): string {
         return current_user_can('manage_tutor_instructor') ? 'tlcd-content-drip' : 'tlcd';
